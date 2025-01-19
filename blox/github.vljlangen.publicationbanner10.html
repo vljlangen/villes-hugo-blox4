@@ -2,29 +2,241 @@
 {{/* https://hugoblox.com */}}
 
 {{/* Initialise the block */}}
+{{/* Initialise */}}
 {{ $page := .wcPage }}
 {{ $block := .wcBlock }}
+{{ $view := $block.design.view | default "card" }}
 
-{{/* Your Hugo variables */}}
-{{/* Access custom front matter content via `$block.content`. */}}
-{{/* E.g. access a `title` field via `$block.content.title`. */}}
-{{/* Pipe the field to `$page.RenderString` to parse it as Markdown. */}}
-{{ $title := $block.content.title | $page.RenderString }}
-{{ $text := $block.content.text | $page.RenderString }}
+{{ $items_offset := $block.content.offset | default 0 }}
+{{ $items_count := $block.content.count }}
+{{ if eq $items_count 0 }}
+  {{ $items_count = 65535 }}
+{{ else }}
+  {{ $items_count = $items_count | default 5 }}
+{{ end }}
 
-{{/* Add your block layout below */}}
-{{/* Styles (in the form of vanilla CSS) can be added to the CSS file. */}}
-{{/* Tailwind styles can optionally be used with the extra step of compiling Tailwind. */}}
-{{/* Access custom front matter design options via `$block.design`. */}}
-{{/* E.g. access a `show_title` field via `$block.design.show_title`. */}}
+{{/* Query */}}
+{{ $query := site.RegularPages }}
+{{ $archive_page := "" }}
 
-<div class="flex flex-col items-center max-w-prose mx-auto gap-3 justify-center">
+{{/* Filters */}}
+{{ if $block.content.page_type }}
+  {{ $query = where $query "Type" $block.content.page_type }}
+  {{ $archive_page = site.GetPage "Section" $block.content.page_type }}
+{{ end }}
+{{ if $block.content.filters.folders }}
+  {{ $folders := $block.content.filters.folders }}
+  {{ $query = where $query "Section" "in" $folders }}
+  {{/* Init archive page to main folder */}}
+  {{ $main_folder := index $folders 0 }}
+  {{ $archive_page = site.GetPage "Section" $main_folder }}
+{{ end }}
+{{ if $block.content.filters.tag }}
+  {{ $archive_page = site.GetPage (printf "tags/%s" (urlize $block.content.filters.tag)) }}
+  {{ $query = $query | intersect $archive_page.Pages }}
+{{ end }}
+{{ if $block.content.filters.category }}
+  {{ $archive_page = site.GetPage (printf "categories/%s" (urlize $block.content.filters.category)) }}
+  {{ $query = $query | intersect $archive_page.Pages }}
+{{ end }}
+{{ if $block.content.filters.publication_type }}
+  {{ $archive_page = site.GetPage (printf "publication_types/%s" $block.content.filters.publication_type) }}
+  {{ $query = $query | intersect $archive_page.Pages }}
+{{ end }}
+{{ if $block.content.filters.exclude_publication_type }}
+  {{ $query = $query | complement (site.GetPage (printf "publication_types/%s" $block.content.filters.exclude_publication_type)).Pages }}
+{{ end }}
+{{ if $block.content.filters.author }}
+  {{ $archive_page = site.GetPage (printf "authors/%s" (urlize $block.content.filters.author)) }}
+  {{ $query = $query | intersect $archive_page.Pages }}
+{{ end }}
+{{ if $block.content.filters.featured_only }}
+  {{ $query = where $query "Params.featured" "==" true }}
+{{ end }}
+{{ if $block.content.filters.exclude_featured }}
+  {{ $query = where $query "Params.featured" "!=" true }}
+{{ end }}
+{{ if $block.content.filters.exclude_past }}
+  {{ $query = where $query "Date" ">=" now }}
+{{ end }}
+{{ if $block.content.filters.exclude_future }}
+  {{ $query = where $query "Date" "<" now }}
+{{ end }}
+
+{{ $count := len $query }}
+
+{{/* Sort */}}
+{{ $sort_by := $block.content.sort_by | default "Date" }}
+{{ $sort_by = partial "functions/get_sort_by_parameter" $sort_by }}
+{{ $sort_ascending := $block.content.sort_ascending | default (eq $block.content.order "asc") | default false }}
+{{ $sort_order := cond $sort_ascending "asc" "desc" }}
+{{ $query = sort $query $sort_by $sort_order }}
+
+{{/* Offset and Limit */}}
+{{ if gt $items_offset 0 }}
+  {{ $query = first $items_count (after $items_offset $query) }}
+{{ else }}
+  {{ $query = first $items_count $query }}
+{{ end }}
+
+{{ $columns := $block.design.columns | default "2" }}
+
+{{ if $block.content.title }}
+<div class="flex flex-col items-center max-w-prose mx-auto gap-3 justify-center px-6 md:px-0">
 
   <div class="mb-6 text-3xl font-bold text-gray-900 dark:text-white">
-    {{ $title }}
+    {{ $block.content.title | emojify | $page.RenderString }}
   </div>
 
-  {{ with $text }}
-    <p class="prose prose-slate lg:prose-xl dark:prose-invert max-w-prose">{{ . }}</p>
+  {{ with $block.content.text }}<p>{{ . | emojify | $page.RenderString }}</p>{{ end }}
+</div>
+{{ end }}
+
+<style>
+  .timeline-container {
+    position: relative;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .timeline-line {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 100%;
+    background: #333;
+    top: 0;
+  }
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 60px;
+  }
+
+  .timeline-circle {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 20px;
+    background: #ff4444;
+    border-radius: 50%;
+    border: 4px solid #fff;
+    box-shadow: 0 0 0 3px #333;
+  }
+
+  .timeline-content {
+    width: 45%;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .timeline-content:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+  }
+
+  .timeline-item:nth-child(odd) .timeline-content {
+    margin-left: auto;
+    margin-right: 55%;
+  }
+
+  .timeline-item:nth-child(even) .timeline-content {
+    margin-right: auto;
+    margin-left: 55%;
+  }
+
+  .timeline-date {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+  }
+
+  .timeline-title {
+    color: #333;
+    font-size: 1.5em;
+    margin-bottom: 15px;
+    text-decoration: none;
+    display: block;
+  }
+
+  .timeline-title:hover {
+    color: #ff4444;
+  }
+
+  .timeline-summary {
+    color: #555;
+    line-height: 1.6;
+  }
+
+  .timeline-tags {
+    margin-top: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .timeline-tag {
+    background: #f0f0f0;
+    color: #666;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.85em;
+  }
+
+  .archive-link {
+    text-align: center;
+    margin-top: 40px;
+  }
+
+  .archive-button {
+    display: inline-block;
+    padding: 12px 30px;
+    background: #333;
+    color: white;
+    text-decoration: none;
+    border-radius: 25px;
+    transition: background 0.3s;
+  }
+
+  .archive-button:hover {
+    background: #ff4444;
+  }
+</style>
+
+<div class="timeline-container">
+  <div class="timeline-line"></div>
+  
+  {{ range $index, $item := $query }}
+    <div class="timeline-item">
+      <div class="timeline-circle"></div>
+      <div class="timeline-content">
+        <div class="timeline-date">{{ $item.Date.Format "January 2, 2006" }}</div>
+        <a href="{{ $item.RelPermalink }}" class="timeline-title">{{ $item.Title }}</a>
+        <div class="timeline-summary">{{ $item.Summary | truncate 150 }}</div>
+        {{ with $item.Params.tags }}
+          <div class="timeline-tags">
+            {{ range . }}
+              <span class="timeline-tag">#{{ . }}</span>
+            {{ end }}
+          </div>
+        {{ end }}
+      </div>
+    </div>
+  {{ end }}
+
+  {{/* Archive link */}}
+  {{ $show_archive_link := $block.content.archive.enable | default (gt $count $items_count) }}
+  {{ if $show_archive_link | and $archive_page }}
+    <div class="archive-link">
+      <a href="{{ $archive_link }}" class="archive-button">
+        {{ $archive_text | emojify }} →
+      </a>
+    </div>
   {{ end }}
 </div>
