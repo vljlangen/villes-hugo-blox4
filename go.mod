@@ -1,3 +1,3 @@
-module github.com/hugo-blox/create-blox
+module github.com/vljlangen/villes-hugo-blox4
 
 go 1.19
